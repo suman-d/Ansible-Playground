@@ -1,0 +1,31 @@
+-- # Playbook for measuring VM Boot time
+
+- hosts: ubuntu
+  gather_facts: no
+
+  tasks:
+
+    - name: Copying the VM boot-time capturing script to all the VMs
+      copy: src=/root/{{ item }} dest=/root/{{ item }} owner=root group=root mode=0777
+      with_items:
+        - vmboot-time.py
+        - vmboot-time-now.py
+
+    - name: Capturing the present time, before reboot
+      command: python /root/vmboot-time.py
+
+    - name: Rebooting the VMs
+      shell: sleep 1 && reboot
+      async: 1
+      poll: 0
+      ignore_errors: true
+      become: true
+
+    - name: Waiting for the VMs to boot up
+      local_action: wait_for host={{ inventory_hostname }} port=22 delay=1 timeout=300 state=started
+
+    - name: Calculating the VM Boot time
+      command: python /root/vmboot-time-now.py
+
+    - name: Fetching VM Boot time from all VMs
+      fetch: src=/root/after.txt dest=/root/bootuptime-{{ inventory_hostname }} flat=yes
